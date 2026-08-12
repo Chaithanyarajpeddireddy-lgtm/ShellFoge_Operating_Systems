@@ -37,6 +37,20 @@ int main(void)
 
         // Tokenize and print the tokens
         Token *tokens = lexer_tokenize(line);
+
+        // Check for built-in command "history"
+        if (tokens != NULL && tokens->type == TOKEN_WORD && strcmp(tokens->value, "history") == 0) {
+            HIST_ENTRY **the_list = history_list();
+            if (the_list) {
+                for (int i = 0; the_list[i]; i++) {
+                    printf("  %d  %s\n", i + history_base, the_list[i]->line);
+                }
+            }
+            token_free_list(tokens);
+            free(line);
+            continue;
+        }
+
         Token *curr = tokens;
         printf("Tokens:\n");
         while (curr != NULL) {
