@@ -1,6 +1,9 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
+#define MAX_TOKENS 128
+#define MAX_TOKEN_LEN 256
+
 typedef enum {
     TOKEN_WORD,
     TOKEN_PIPE,            // |

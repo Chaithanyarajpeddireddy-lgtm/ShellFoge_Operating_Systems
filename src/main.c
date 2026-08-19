@@ -6,6 +6,11 @@
 #include "token.h"
 #include "lexer.h"
 
+#include "parser.h"
+#include "expand.h"
+
+int last_exit_status = 0;
+
 int main(void)
 {
     // Display a welcome banner when the shell starts
@@ -61,6 +66,12 @@ int main(void)
             }
             curr = curr->next;
         }
+        pipeline_t pipeline;
+        if (parse(tokens, &pipeline)) {
+        expand_variables(&pipeline);
+        pipeline_print(&pipeline);
+        pipeline_free(&pipeline);
+    }
 
         // Free the tokens
         token_free_list(tokens);
