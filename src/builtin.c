@@ -24,7 +24,9 @@ static void builtin_cd(command_t *cmd) {
 
     if (chdir(dir) != 0) {
         perror("cd");
-    }
+    } else {
+    printf("Changed directory to: %s\n", dir);
+}
 }
 
 /* ---------- pwd ---------- */
@@ -40,12 +42,13 @@ static void builtin_pwd(command_t *cmd) {
         return;
     }
 
-    printf("%s\n", buffer);
+    printf("This is my directory: %s\n", buffer);
 }
 
 /* ---------- echo ---------- */
 static void builtin_echo(command_t *cmd) {
-    for (int i = 1; i < cmd->argc; i++) {
+     printf("Shellforge says: ");
+   for (int i = 1; i < cmd->argc; i++) {
         printf("%s", cmd->argv[i]);
         if (i != cmd->argc - 1) {
             printf(" ");
