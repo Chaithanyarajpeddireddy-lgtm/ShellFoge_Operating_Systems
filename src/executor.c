@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include "../include/executor.h"
 #include "../include/builtin.h"
@@ -10,10 +13,37 @@
 extern int last_exit_status; /* defined in main.c */
 int shell_exit_requested = 0;
 
+/* ---------- MILESTONE-4.2: SIGCHLD handler (zombie prevention) ---------- */
+
+static void sigchld_handler(int sig) {
+    int saved_errno = errno;
+    (void)sig;
+    while (waitpid(-1, NULL, WNOHANG) > 0) {
+        /* Reap finished children */
+    }
+    errno = saved_errno;
+}
+
+void setup_background_handler(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, NULL);
+}
+
 static int run_external(command_t *cmd) {
     pid_t pid = fork();
 
     if (pid == 0) {
+        if (cmd->background) {
+            int null_fd = open("/dev/null", O_RDONLY);
+            if (null_fd >= 0) {
+                dup2(null_fd, STDIN_FILENO);
+                close(null_fd);
+            }
+        }
         if (cmd->input[0]) {
             int fd_in = open(cmd->input, O_RDONLY);
             if (fd_in < 0) { perror(cmd->input); _exit(127); }
@@ -32,7 +62,8 @@ static int run_external(command_t *cmd) {
         _exit(127);
     } else if (pid > 0) {
         if (cmd->background) {
-            printf("[background pid %d]\n", pid);
+            printf("[Background PID: %d]\n", pid);
+            last_exit_status = 0;
             return 0;
         }
         int status;
@@ -98,6 +129,8 @@ int execute_pipeline(pipeline_t *pipeline) {
     pid_t pids[MAX_COMMANDS];
     int previous_read = -1;
 
+    int background = pipeline->commands[n - 1].background;
+
     for (int i = 0; i < n; i++) {
         command_t *cmd = &pipeline->commands[i];
         int pipefd[2] = { -1, -1 };
@@ -112,11 +145,20 @@ int execute_pipeline(pipeline_t *pipeline) {
         if (pid == 0) {
             if (previous_read != -1) {
                 dup2(previous_read, STDIN_FILENO);
-            } else if (cmd->input[0]) {
-                int fd_in = open(cmd->input, O_RDONLY);
-                if (fd_in < 0) { perror(cmd->input); _exit(127); }
-                dup2(fd_in, STDIN_FILENO);
-                close(fd_in);
+            } else {
+                if (background) {
+                    int null_fd = open("/dev/null", O_RDONLY);
+                    if (null_fd >= 0) {
+                        dup2(null_fd, STDIN_FILENO);
+                        close(null_fd);
+                    }
+                }
+                if (cmd->input[0]) {
+                    int fd_in = open(cmd->input, O_RDONLY);
+                    if (fd_in < 0) { perror(cmd->input); _exit(127); }
+                    dup2(fd_in, STDIN_FILENO);
+                    close(fd_in);
+                }
             }
 
             if (i < n - 1) {
@@ -148,6 +190,12 @@ int execute_pipeline(pipeline_t *pipeline) {
         if (previous_read != -1) close(previous_read);
         if (pipefd[1] != -1) close(pipefd[1]);
         previous_read = pipefd[0];
+    }
+
+    if (background) {
+        printf("[Background Pipeline PID: %d]\n", pids[0]);
+        last_exit_status = 0;
+        return 0;
     }
 
     int last_status = -1;

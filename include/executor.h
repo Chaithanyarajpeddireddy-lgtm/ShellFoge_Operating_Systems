@@ -10,6 +10,11 @@
    rather than a "should the shell stop" boolean. */
 extern int shell_exit_requested;
 
+/* MILESTONE-4.2: installs the SIGCHLD handler that reaps finished background
+   jobs so they never become zombies. Must be called once, at shell startup,
+   before the REPL loop begins accepting commands. */
+void setup_background_handler(void);
+
 int execute_command(command_t *cmd);
 int execute_pipeline(pipeline_t *pipeline);
 

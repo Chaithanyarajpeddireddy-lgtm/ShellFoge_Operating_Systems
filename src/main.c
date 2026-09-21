@@ -14,6 +14,8 @@ int last_exit_status = 0;
 
 int main(void)
 {
+    setup_background_handler();
+
     printf("=====================================\n");
     printf("Shellforge \n");
     printf("BUILD and COMPILED by CHAITHANYA RAJ\n");
