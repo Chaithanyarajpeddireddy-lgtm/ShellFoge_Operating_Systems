@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 #include "token.h"
@@ -9,12 +11,36 @@
 #include "parser.h"
 #include "expand.h"
 #include "executor.h"
+#include "jobs.h"
 
 int last_exit_status = 0;
+
+/* Job control setup (MILESTONE-5.1):
+   - put the shell in its own process group and take the terminal for it,
+   - ignore the signals a real interactive shell must ignore for itself:
+       SIGTTOU/SIGTTIN so handing the terminal to a job and taking it back
+       (tcsetpgrp) never stops the shell, and
+       SIGTSTP/SIGINT/SIGQUIT so Ctrl+Z / Ctrl+C / Ctrl+\ at the prompt do
+       not suspend or kill the shell - they only reach whichever job
+       currently owns the terminal. Children reset these to default
+       before exec (see executor.c). */
+static void init_job_control(void) {
+    shell_pgid = getpid();
+    setpgid(shell_pgid, shell_pgid);
+    tcsetpgrp(STDIN_FILENO, shell_pgid);
+
+    signal(SIGTTOU, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+}
 
 int main(void)
 {
     setup_background_handler();
+    init_job_control();
+    jobs_init();
 
     printf("=====================================\n");
     printf("Shellforge \n");
@@ -24,6 +50,9 @@ int main(void)
     char *line;
     while (1)
     {
+        /* Report background jobs that finished/stopped since the last prompt. */
+        jobs_check_background();
+
         line = readline("shellforge$ ");
         if (line == NULL)
         {
